@@ -11,4 +11,4 @@ This project demonstrates a 3D visualization of Earth using Three.js. It include
 
 ## Demo
 
-You can see a live demo of this project [here](jerald-golden.github.io/3D-World/).
+You can see a live demo of this project [here](https://jerald-golden.github.io/3D-World/).
