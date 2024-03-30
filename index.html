@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <title>earth</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <link type="text/css" rel="stylesheet" href="main.css">
+</head>
+
+<body>
+
+    <script type="importmap">
+			{
+				"imports": {
+					"three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+				}
+			}
+		</script>
+
+    <script type="module">
+
+        import * as THREE from 'three';
+
+        import Stats from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/stats.module.js';
+
+        import { MapControls } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/MapControls.js';
+        import { FlyControls } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/FlyControls.js';
+        import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js';
+        import { EffectComposer } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/postprocessing/RenderPass.js';
+        import { FilmPass } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/postprocessing/FilmPass.js';
+        import { OutputPass } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/postprocessing/OutputPass.js';
+
+        const radius = 6371;
+        const rotationSpeed = 0.02;
+
+        const cloudsScale = 1.005;
+        const moonScale = 0.23;
+
+        const MARGIN = 0;
+        let SCREEN_HEIGHT = window.innerHeight - MARGIN * 2;
+        let SCREEN_WIDTH = window.innerWidth;
+
+        let camera, controls, scene, renderer, stats;
+        let geometry, meshPlanet, meshClouds, meshMoon;
+        let dirLight;
+
+        let composer;
+
+        const textureLoader = new THREE.TextureLoader();
+
+        let d, dPlanet, dMoon;
+        const dMoonVec = new THREE.Vector3();
+
+        const clock = new THREE.Clock();
+
+        init();
+        animate();
+
+        function init() {
+
+            camera = new THREE.PerspectiveCamera(45, SCREEN_WIDTH / SCREEN_HEIGHT, 50, 1e7);
+            camera.position.z = radius * 5;
+
+            scene = new THREE.Scene();
+
+
+            dirLight = new THREE.DirectionalLight(0xffffff,4);
+            dirLight.position.set(- 1, 0, 1).normalize();
+            scene.add(dirLight);
+
+
+            const ambientLight = new THREE.AmbientLight(0xffffff,0.1);
+            scene.add(ambientLight);
+
+            const materialNormalMap = new THREE.MeshPhongMaterial({
+
+                // specular: 0x7c7c7c,
+                shininess: 30,
+                map: textureLoader.load('models/planet/earth1.jpg'),
+                bumpMap: textureLoader.load('models/planet/earthbump.jpg'),
+                bumpScale: 5 ,
+                side:THREE.DoubleSide,
+
+                // y scale is negated to compensate for normal map handedness.
+                normalScale: new THREE.Vector2(0.85, - 0.85)
+
+            });
+            materialNormalMap.map.colorSpace = THREE.SRGBColorSpace;
+            // materialNormalMap.bumpMap.colorSpace = THREE.SRGBColorSpace;
+
+            // planet
+
+            geometry = new THREE.SphereGeometry(radius, 100, 50);
+
+            meshPlanet = new THREE.Mesh(geometry, materialNormalMap);
+            meshPlanet.rotation.y = 0;
+            scene.add(meshPlanet);
+
+            // clouds
+
+            const materialClouds = new THREE.MeshPhongMaterial({
+
+                map: textureLoader.load('models/planet/cloud.png'),
+                transparent: true,
+
+            });
+            materialClouds.map.colorSpace = THREE.SRGBColorSpace;
+
+            meshClouds = new THREE.Mesh(geometry, materialClouds);
+            meshClouds.scale.set(cloudsScale, cloudsScale, cloudsScale);
+            scene.add(meshClouds); 
+
+            // moon
+
+            const materialMoon = new THREE.MeshPhongMaterial({
+
+                map: textureLoader.load('models/planet/moon.jpg'),
+                // transparent: true
+
+            });
+            materialMoon.map.colorSpace = THREE.SRGBColorSpace;
+
+            meshMoon = new THREE.Mesh(geometry, materialMoon);
+            meshMoon.position.set(radius * 5, 0, 0);
+            meshMoon.scale.set(moonScale, moonScale, moonScale);
+            scene.add(meshMoon);
+
+            // stars
+
+            const r = radius, starsGeometry = [new THREE.BufferGeometry(), new THREE.BufferGeometry()];
+
+            const vertices1 = [];
+            const vertices2 = [];
+
+            const vertex = new THREE.Vector3();
+
+            for (let i = 0; i < 250; i++) {
+
+                vertex.x = Math.random() * 2 - 1;
+                vertex.y = Math.random() * 2 - 1;
+                vertex.z = Math.random() * 2 - 1;
+                vertex.multiplyScalar(r);
+
+                vertices1.push(vertex.x, vertex.y, vertex.z);
+
+            }
+
+            for (let i = 0; i < 1500; i++) {
+
+                vertex.x = Math.random() * 2 - 1;
+                vertex.y = Math.random() * 2 - 1;
+                vertex.z = Math.random() * 2 - 1;
+                vertex.multiplyScalar(r);
+
+                vertices2.push(vertex.x, vertex.y, vertex.z);
+
+            }
+
+            starsGeometry[0].setAttribute('position', new THREE.Float32BufferAttribute(vertices1, 3));
+            starsGeometry[1].setAttribute('position', new THREE.Float32BufferAttribute(vertices2, 3));
+
+            const starsMaterials = [
+                new THREE.PointsMaterial({ color: 0x9c9c9c, size: 2, sizeAttenuation: false }),
+                new THREE.PointsMaterial({ color: 0x9c9c9c, size: 1, sizeAttenuation: false }),
+                new THREE.PointsMaterial({ color: 0x7c7c7c, size: 2, sizeAttenuation: false }),
+                new THREE.PointsMaterial({ color: 0x838383, size: 1, sizeAttenuation: false }),
+                new THREE.PointsMaterial({ color: 0x5a5a5a, size: 2, sizeAttenuation: false }),
+                new THREE.PointsMaterial({ color: 0x5a5a5a, size: 1, sizeAttenuation: false })
+            ];
+
+            for (let i = 10; i < 30; i++) {
+
+                const stars = new THREE.Points(starsGeometry[i % 2], starsMaterials[i % 6]);
+
+                stars.rotation.x = Math.random() * 6;
+                stars.rotation.y = Math.random() * 6;
+                stars.rotation.z = Math.random() * 6;
+                stars.scale.setScalar(i * 10);
+
+                stars.matrixAutoUpdate = false;
+                stars.updateMatrix();
+
+                scene.add(stars);
+
+            }
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(SCREEN_WIDTH, SCREEN_HEIGHT);
+            document.body.appendChild(renderer.domElement);
+
+
+            // controls = new MapControls(camera, renderer.domElement);
+            // controls = new FlyControls(camera, renderer.domElement);
+            controls = new OrbitControls(camera, renderer.domElement);
+
+            controls.movementSpeed = 1000;
+            controls.domElement = renderer.domElement;
+            controls.rollSpeed = 0;
+            // controls.rollSpeed = 0.1;
+            controls.autoForward = false;
+            controls.dragToLook = false;
+            controls.maxDistance = 900000;
+            controls.minDistance = 7000;
+
+
+            stats = new Stats();
+            document.body.appendChild(stats.dom);
+
+            window.addEventListener('resize', onWindowResize);
+
+            // postprocessing
+
+            const renderModel = new RenderPass(scene, camera);
+            const effectFilm = new FilmPass(0.35);
+            const outputPass = new OutputPass();
+
+            composer = new EffectComposer(renderer);
+
+            composer.addPass(renderModel);
+            composer.addPass(effectFilm);
+            composer.addPass(outputPass);
+
+        }
+
+        function onWindowResize() {
+
+            SCREEN_HEIGHT = window.innerHeight;
+            SCREEN_WIDTH = window.innerWidth;
+
+            camera.aspect = SCREEN_WIDTH / SCREEN_HEIGHT;
+            camera.updateProjectionMatrix();
+
+            renderer.setSize(SCREEN_WIDTH, SCREEN_HEIGHT);
+            composer.setSize(SCREEN_WIDTH, SCREEN_HEIGHT);
+
+        }
+
+        function animate() {
+
+            requestAnimationFrame(animate);
+
+            render();
+            stats.update();
+
+        }
+
+        function render() {
+
+            // rotate the planet and clouds
+
+            const delta = clock.getDelta();
+
+            meshPlanet.rotation.y +=  rotationSpeed * delta;
+            meshClouds.rotation.y += -rotationSpeed * delta;
+            meshMoon.rotation.y += rotationSpeed * delta;
+
+            // slow down as we approach the surface
+
+            dPlanet = camera.position.length();
+
+            dMoonVec.subVectors(camera.position, meshMoon.position);
+            dMoon = dMoonVec.length();
+
+            if (dMoon < dPlanet) {
+
+                d = (dMoon - radius * moonScale * 1.01);
+
+            } else {
+
+                d = (dPlanet - radius * 1.01);
+
+            }
+
+            controls.movementSpeed = 0.33 * d;
+            controls.update(delta);
+
+            composer.render(delta);
+
+        }
+
+    </script>
+</body>
+
+</html>
