@@ -10,6 +10,7 @@ This project demonstrates a 3D visualization of Earth using Three.js. It include
 - Realistic lighting and post-processing effects for added visual appeal.
 
 # Dependencies
+
 Three.js (v0.160.0): https://threejs.org/
 
 # Demo
